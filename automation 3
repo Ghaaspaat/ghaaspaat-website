@@ -1,0 +1,332 @@
+{
+  "name": "Ghaaspaat - 01 Order Intake Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ghaaspaat-order-intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "order_webhook",
+      "name": "Order Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "customer_name",
+              "name": "customer_name",
+              "value": "={{ $json.body.customer_name || $json.customer_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.body.phone || $json.phone || $json.mobile || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "items",
+              "name": "items",
+              "value": "={{ $json.body.items || $json.items || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "order_id",
+              "name": "order_id",
+              "value": "={{ $json.body.order_id || $json.order_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "delivery_date",
+              "name": "delivery_date",
+              "value": "={{ $json.body.delivery_date || $json.delivery_date || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "order_notes",
+              "name": "order_notes",
+              "value": "={{ $json.body.notes || $json.notes || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "edit_fields",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "customer_name",
+              "leftValue": "={{ $json.customer_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phone",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "items",
+              "leftValue": "={{ $json.items }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if_-_validate",
+      "name": "IF - Validate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order ID": "={{ $json.order_id }}",
+            "Customer Name": "={{ $json.customer_name }}",
+            "Phone": "={{ $json.phone }}",
+            "Items": "={{ $json.items }}",
+            "Delivery Date": "={{ $json.delivery_date }}",
+            "Notes": "={{ $json.order_notes }}",
+            "Status": "Received",
+            "Created At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "google_sheets_-_append_order",
+      "name": "Google Sheets - Append Order",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        910,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Write a concise, warm WhatsApp order acknowledgement for this Ghaaspaat Farms customer. Do not invent price, availability, or delivery promises. Include order ID if present. Customer: {{ $json.customer_name }}. Items: {{ $json.items }}. Order ID: {{ $json.order_id }}. Delivery date: {{ $json.delivery_date }}. Return only the message text.",
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "id": "basic_llm_chain",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        910,
+        470
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "groq_chat_model",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        910,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/WHATSAPP_PHONE_NUMBER_ID/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer WHATSAPP_ACCESS_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({messaging_product:'whatsapp',to:$json.phone || $json.whatsapp_number || $json.mobile,type:'text',text:{preview_url:false,body:$node['Basic LLM Chain'].json.text || $node['Basic LLM Chain'].json.response || 'Thank you for your order with Ghaaspaat Farms. We have received your request and our team will confirm shortly.'}}) }}",
+        "options": {}
+      },
+      "id": "whatsapp_business_cloud",
+      "name": "WhatsApp Business Cloud",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1190,
+        470
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "invalid_order_-_review",
+      "name": "Invalid Order - Review",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        910,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Order Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "IF - Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Validate": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Order - Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append Order": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Business Cloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
