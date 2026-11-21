@@ -1,0 +1,322 @@
+{
+  "name": "Ghaaspaat - 03 Customer Follow-up Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ghaaspaat-customer-followup",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "follow-up_webhook",
+      "name": "Follow-up Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "customer_name",
+              "name": "customer_name",
+              "value": "={{ $json.body.customer_name || $json.customer_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.body.phone || $json.phone || $json.mobile || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "order_id",
+              "name": "order_id",
+              "value": "={{ $json.body.order_id || $json.order_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "milestone",
+              "name": "milestone",
+              "value": "={{ $json.body.milestone || $json.milestone || 'delivery' }}",
+              "type": "string"
+            },
+            {
+              "id": "product",
+              "name": "product",
+              "value": "={{ $json.body.product || $json.product || $json.items || 'microgreens order' }}",
+              "type": "string"
+            },
+            {
+              "id": "feedback_context",
+              "name": "feedback_context",
+              "value": "={{ $json.body.feedback_context || $json.feedback_context || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "edit_fields",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "customer_name",
+              "leftValue": "={{ $json.customer_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phone",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if_-_validate",
+      "name": "IF - Validate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Write a short, polite WhatsApp follow-up for a Ghaaspaat Farms customer after their {{ $json.milestone }}. Ask how their {{ $json.product }} experience was and invite feedback. Be natural, not pushy. Do not invent facts or offer discounts. Customer: {{ $json.customer_name }}. Order ID: {{ $json.order_id }}. Extra context: {{ $json.feedback_context }}. Return only the message text.",
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "id": "basic_llm_chain",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        920,
+        470
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "groq_chat_model",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        920,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/WHATSAPP_PHONE_NUMBER_ID/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer WHATSAPP_ACCESS_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({messaging_product:'whatsapp',to:$json.phone || $json.whatsapp_number || $json.mobile,type:'text',text:{preview_url:false,body:$node['Basic LLM Chain'].json.text || $node['Basic LLM Chain'].json.response || 'Hello! This is Ghaaspaat Farms checking in after your recent order. We hope you enjoyed it. We would love to hear your feedback.'}}) }}",
+        "options": {}
+      },
+      "id": "whatsapp_business_cloud",
+      "name": "WhatsApp Business Cloud",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        470
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Follow-ups",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Customer Name": "={{ $json.customer_name }}",
+            "Phone": "={{ $json.phone }}",
+            "Order ID": "={{ $json.order_id }}",
+            "Milestone": "={{ $json.milestone }}",
+            "Product": "={{ $json.product }}",
+            "Message": "={{ $node['Basic LLM Chain'].json.text || $node['Basic LLM Chain'].json.response }}",
+            "Status": "Sent",
+            "Sent At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "google_sheets_-_log_follow-up",
+      "name": "Google Sheets - Log Follow-up",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1450,
+        470
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "invalid_contact_-_review",
+      "name": "Invalid Contact - Review",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        920,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Follow-up Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "IF - Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Validate": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Contact - Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Business Cloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Business Cloud": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
